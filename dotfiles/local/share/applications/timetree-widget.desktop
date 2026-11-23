@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=TimeTree
+Comment=Desktop TimeTree Calendar Widget
+Exec=__USER_HOME__/.local/bin/launch-desktop-widgets.sh --focus slot2
+Icon=calendar-blue-31
+Terminal=false
+Categories=Office;Calendar;
+StartupNotify=false

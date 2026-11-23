@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Notion
+Comment=Desktop Notion Widget
+Exec=__USER_HOME__/.local/bin/launch-desktop-widgets.sh --focus-notion
+Icon=Notion
+Terminal=false
+Categories=Office;Utility;
+StartupNotify=false

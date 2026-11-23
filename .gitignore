@@ -1,0 +1,19 @@
+# 個人情報・ログインセッション・一時キャッシュを除外
+dotfiles/config/desktop-widgets/notion/
+dotfiles/config/desktop-widgets/timetree/
+dotfiles/config/desktop-widgets/custom3/
+dotfiles/config/desktop-widgets/miniweb/
+dotfiles/config/conky/scripts/gmail_app_password
+generated.css
+urls.conf
+*.log
+*.deb
+*.tmp.*
+.cache/
+prev_*.json
+album_art*
+weather.json
+weather.tsv
+status.json
+status.tsv
+gmail_cache.json

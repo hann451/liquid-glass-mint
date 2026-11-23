@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Devilspie2 Window Rules
+Exec=devilspie2
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=2

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=デスクトップウィジェット設定
+GenericName=Desktop Widget Settings
+Comment=NotionやTimeTree等のデスクトップウィジェットのURL・サイズ・透過度を変更します
+Exec=__USER_HOME__/.local/bin/desktop-widgets-settings.py
+Icon=cinnamon-preferences-desktop-display
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=widget;notion;timetree;url;size;ウィジェット;設定;
+StartupNotify=true

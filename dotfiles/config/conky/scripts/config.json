@@ -1,0 +1,13 @@
+{
+    "latitude": 35.6544,
+    "longitude": 139.7447,
+    "location_name": "Tokyo",
+    "timezone": "Asia/Tokyo",
+    "gmail": {
+        "enabled": false,
+        "imap_server": "imap.gmail.com",
+        "email": "",
+        "app_password_file": "__USER_HOME__/.config/conky/scripts/gmail_app_password"
+    },
+    "custom_json_path": "__USER_HOME__/.cache/liquid-glass/custom.json"
+}

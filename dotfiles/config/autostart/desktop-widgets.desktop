@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Desktop Embedded Web Widgets
+Exec=__USER_HOME__/.local/bin/launch-desktop-widgets.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5
