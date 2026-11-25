@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Keyboard CapsLock IME Toggle
+Exec=__USER_HOME__/.local/bin/setup-keyboard-ime.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=6

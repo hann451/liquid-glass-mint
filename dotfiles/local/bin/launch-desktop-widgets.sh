@@ -8,6 +8,12 @@ case "${1:-}" in
     --align)
         exec python3 "$MGR" align
         ;;
+    --unlock)
+        exec python3 "$MGR" unlock
+        ;;
+    --capture)
+        exec python3 "$MGR" capture
+        ;;
     --restart)
         exec python3 "$MGR" apply --restart-urls
         ;;

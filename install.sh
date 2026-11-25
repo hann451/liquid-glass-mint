@@ -77,6 +77,8 @@ mkdir -p \
   "$HOME/.config/cinnamon/spices/BlurCinnamon@klangman" \
   "$HOME/.config/cinnamon/spices/Cinnamenu@json" \
   "$HOME/.config/cinnamon/spices/spicy-clipboard-applet@Twilight0" \
+  "$HOME/.config/fcitx5" \
+  "$HOME/.config/mozc" \
   "$HOME/.local/share/plank/themes/LiquidGlass" \
   "$HOME/.local/share/applications" \
   "$HOME/.local/bin" \
@@ -90,6 +92,8 @@ cp -r "$DOT/config/plank/dock1/launchers/." "$HOME/.config/plank/dock1/launchers
 cp -r "$DOT/config/ulauncher/." "$HOME/.config/ulauncher/"
 cp -r "$DOT/config/autostart/." "$HOME/.config/autostart/"
 cp -r "$DOT/config/cinnamon-spices/." "$HOME/.config/cinnamon/spices/"
+[ -d "$DOT/config/fcitx5" ] && cp -r "$DOT/config/fcitx5/." "$HOME/.config/fcitx5/"
+[ -d "$DOT/config/mozc" ] && cp -r "$DOT/config/mozc/." "$HOME/.config/mozc/"
 cp -r "$DOT/local/share/plank/themes/LiquidGlass/." "$HOME/.local/share/plank/themes/LiquidGlass/"
 cp -r "$DOT/local/share/applications/." "$HOME/.local/share/applications/"
 cp -r "$DOT/local/bin/." "$HOME/.local/bin/"
@@ -103,6 +107,8 @@ for target in \
   "$HOME/.config/ulauncher" \
   "$HOME/.config/autostart" \
   "$HOME/.config/cinnamon/spices" \
+  "$HOME/.config/fcitx5" \
+  "$HOME/.config/mozc" \
   "$HOME/.local/share/applications" \
   "$HOME/.local/bin"; do
     find "$target" -type f -exec sed -i "s|__USER_HOME__|$HOME|g" {} +
@@ -110,6 +116,8 @@ done
 
 chmod +x "$HOME/.config/conky/scripts/"*.py "$HOME/.local/bin/"*
 python3 "$HOME/.local/bin/desktop-widgets-manager.py" sync-configs
+[ -f "$HOME/.config/mozc/setup_mozc_smart.py" ] && python3 "$HOME/.config/mozc/setup_mozc_smart.py" || true
+[ -x "$HOME/.local/bin/setup-keyboard-ime.sh" ] && "$HOME/.local/bin/setup-keyboard-ime.sh" || true
 
 echo "[5/7] Cinnamon と Plank 設定を適用中..."
 gsettings set org.cinnamon.theme name 'WhiteSur-Dark'
@@ -140,6 +148,10 @@ gsettings set org.cinnamon hotcorner-layout "['scale:true:150', 'expo:true:150',
 gsettings set org.cinnamon.settings-daemon.plugins.color night-light-enabled true
 gsettings set org.cinnamon.settings-daemon.plugins.color night-light-schedule-mode 'auto'
 gsettings set org.cinnamon.settings-daemon.plugins.color night-light-temperature 3700
+gsettings set org.cinnamon.gestures enabled true
+gsettings set org.cinnamon.gestures swipe-percent-threshold 35
+gsettings set org.cinnamon.gestures swipe-right-3 'EXEC::xdotool key ctrl+Next::end'
+gsettings set org.cinnamon.gestures swipe-left-3 'EXEC::xdotool key ctrl+Prior::end'
 
 DOCK_LIST=()
 for f in 01-nemo.dockitem 02-applications.dockitem 03-google-chrome.dockitem 04-vscode.dockitem 05-terminal.dockitem 06-youtube-music.dockitem 07-notion.dockitem 08-timetree.dockitem 09-settings.dockitem 09b-widget-settings.dockitem 10-trash.dockitem; do

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Manage desktop embedded web widgets from ~/.config/desktop-widgets/widgets.json."""
+"""Manage unlimited desktop embedded web/app widgets from widgets.json."""
 
+import glob
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -17,8 +19,10 @@ DEVILSPIE_LUA = os.path.join(HOME, ".config", "devilspie2", "desktop_widgets.lua
 BLUR_JSON = os.path.join(
     HOME, ".config", "cinnamon", "spices", "BlurCinnamon@klangman", "BlurCinnamon@klangman.json"
 )
+APPS_DIR = os.path.join(HOME, ".local", "share", "applications")
+PLANK_LAUNCHERS_DIR = os.path.join(HOME, ".config", "plank", "dock1", "launchers")
 LOG_DIR = os.path.join(HOME, ".cache", "liquid-glass")
-KNOWN_CLASSES = {"DesktopNotion", "DesktopMiniWeb", "DesktopWidget2", "DesktopWidget3"}
+LEGACY_CLASSES = {"DesktopNotion", "DesktopMiniWeb", "DesktopWidget2", "DesktopWidget3"}
 
 
 def ensure_display_env():
@@ -56,9 +60,15 @@ def load_config():
     return {"slots": []}
 
 
+def save_config(cfg):
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=4, ensure_ascii=False)
+
+
 def resolve_slot_geom(slot, screen_w, screen_h):
-    w = max(240, min(screen_w - 40, int(slot.get("width", 480))))
-    h = max(180, min(screen_h - 80, int(slot.get("height", 400))))
+    w = max(200, min(screen_w - 20, int(slot.get("width", 480))))
+    h = max(160, min(screen_h - 40, int(slot.get("height", 400))))
     if slot.get("align_right", True):
         margin = max(0, int(slot.get("right_margin", 32)))
         x = max(0, screen_w - w - margin)
@@ -70,12 +80,114 @@ def resolve_slot_geom(slot, screen_w, screen_h):
     return x, y, w, h, opacity, corner
 
 
-def sync_configs(restart_devilspie=True, env=None):
+def widget_desktop_path(slot_id):
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "_", slot_id)
+    return os.path.join(APPS_DIR, f"desktop-widget-{safe}.desktop")
+
+
+def sync_hidden_desktop_files(slots):
+    os.makedirs(APPS_DIR, exist_ok=True)
+    active_files = set()
+    for slot in slots:
+        if slot.get("type", "web") != "web":
+            continue
+        wm_class = str(slot.get("wm_class", "")).strip()
+        if not wm_class:
+            continue
+        df = widget_desktop_path(slot["id"])
+        active_files.add(df)
+        content = "\n".join([
+            "[Desktop Entry]",
+            "Type=Application",
+            f"Name=Desktop Widget ({slot.get('name', slot['id'])})",
+            f"Exec={os.path.join(HOME, '.local', 'bin', 'launch-desktop-widgets.sh')} --focus {slot['id']}",
+            f"StartupWMClass={wm_class}",
+            "NoDisplay=true",
+            "Terminal=false",
+            "",
+        ])
+        with open(df, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    for stale in glob.glob(os.path.join(APPS_DIR, "desktop-widget-*.desktop")):
+        if stale not in active_files:
+            try:
+                os.remove(stale)
+            except OSError:
+                pass
+
+
+def sync_plank_dock_pins(slots):
+    """Remove unused notion/timetree dockitems and keep only pin_to_dock=true widget items."""
+    if not shutil.which("plank"):
+        return
+    try:
+        cur_raw = subprocess.check_output(
+            ["dconf", "read", "/net/launchpad/plank/docks/dock1/dock-items"],
+            text=True,
+            timeout=2,
+        ).strip()
+    except Exception:
+        return
+
+    # Parse dconf string list e.g. ['a.dockitem', 'b.dockitem']
+    cur_items = re.findall(r"'([^']+)'", cur_raw)
+    if not cur_items:
+        return
+
+    # Legacy widget dockitems to clean up unless explicitly pinned
+    legacy_widget_items = {"07-notion.dockitem", "08-timetree.dockitem", "08-gmail.dockitem"}
+    pinned_map = {}
+    for slot in slots:
+        safe = re.sub(r"[^a-zA-Z0-9_-]", "_", slot["id"])
+        fname = f"w-{safe}.dockitem"
+        if slot.get("enabled", False) and slot.get("pin_to_dock", False):
+            pinned_map[fname] = slot
+
+    changed = False
+    new_items = []
+    for item in cur_items:
+        if item in legacy_widget_items or (item.startswith("w-") and item.endswith(".dockitem") and item not in pinned_map):
+            p = os.path.join(PLANK_LAUNCHERS_DIR, item)
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+            changed = True
+            continue
+        new_items.append(item)
+
+    for fname, slot in pinned_map.items():
+        if fname not in new_items:
+            df = widget_desktop_path(slot["id"]) if slot.get("type", "web") == "web" else slot.get("desktop_file", "")
+            if df and os.path.exists(df):
+                os.makedirs(PLANK_LAUNCHERS_DIR, exist_ok=True)
+                with open(os.path.join(PLANK_LAUNCHERS_DIR, fname), "w", encoding="utf-8") as f:
+                    f.write(f"[PlankDockItemPreferences]\nLauncher=file://{df}\n")
+                insert_pos = max(0, len(new_items) - 2)
+                new_items.insert(insert_pos, fname)
+                changed = True
+
+    if changed:
+        subprocess.run(["pkill", "-x", "plank"], stderr=subprocess.DEVNULL)
+        time.sleep(0.5)
+        dconf_val = "[" + ", ".join(f"'{i}'" for i in new_items) + "]"
+        subprocess.run(["dconf", "write", "/net/launchpad/plank/docks/dock1/dock-items", dconf_val], check=False)
+        os.makedirs(LOG_DIR, exist_ok=True)
+        env = ensure_display_env()
+        with open(os.path.join(LOG_DIR, "plank.log"), "ab") as logf:
+            subprocess.Popen(["plank"], env=env, stdout=logf, stderr=logf, start_new_session=True)
+
+
+def sync_configs(restart_devilspie=True, update_plank=True, env=None):
     if env is None:
         env = ensure_display_env()
     cfg = load_config()
     slots = cfg.get("slots", [])
     screen_w, screen_h = get_screen_size(env)
+
+    sync_hidden_desktop_files(slots)
 
     # 1. Generate Devilspie2 Lua rules
     os.makedirs(os.path.dirname(DEVILSPIE_LUA), exist_ok=True)
@@ -118,7 +230,7 @@ def sync_configs(restart_devilspie=True, env=None):
             if "enable-window-effects" in blur_data:
                 blur_data["enable-window-effects"]["value"] = True
             inc = blur_data.get("windows-inclusion-list", {}).get("value", [])
-            managed_names = KNOWN_CLASSES | {str(s.get("wm_class", "")) for s in slots}
+            managed_names = LEGACY_CLASSES | {str(s.get("wm_class", "")) for s in slots}
             inc = [item for item in inc if item.get("application") not in managed_names]
             new_entries = []
             for slot in slots:
@@ -155,16 +267,16 @@ def sync_configs(restart_devilspie=True, env=None):
         time.sleep(0.3)
         os.makedirs(LOG_DIR, exist_ok=True)
         with open(os.path.join(LOG_DIR, "devilspie2.log"), "ab") as logf:
-            subprocess.Popen(
-                ["devilspie2"],
-                env=env,
-                stdout=logf,
-                stderr=logf,
-                start_new_session=True,
-            )
+            subprocess.Popen(["devilspie2"], env=env, stdout=logf, stderr=logf, start_new_session=True)
+
+    # 4. Sync Plank dock pins cleanly
+    if update_plank:
+        sync_plank_dock_pins(slots)
 
 
 def find_wid(wm_class, env):
+    if not wm_class:
+        return None
     try:
         out = subprocess.check_output(["wmctrl", "-lx"], env=env, text=True, timeout=3)
         pat = wm_class.lower()
@@ -177,22 +289,19 @@ def find_wid(wm_class, env):
     return None
 
 
-def get_running_app_url(profile_dir):
-    try:
-        out = subprocess.check_output(
-            ["pgrep", "-af", f"user-data-dir={profile_dir}"],
-            text=True,
-            timeout=2,
-        )
-        for line in out.splitlines():
-            if "--type=" in line:
-                continue
-            m = re.search(r"--app=(\S+)", line)
-            if m:
-                return m.group(1)
-            return "__RUNNING__"
-    except Exception:
-        return None
+def get_running_profile_url(profile_dir):
+    needle = f"--user-data-dir={profile_dir}"
+    for pid_str in os.listdir("/proc"):
+        if not pid_str.isdigit():
+            continue
+        try:
+            raw = open(f"/proc/{pid_str}/cmdline", "rb").read()
+            cmd = raw.replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+            if needle in cmd and "--type=" not in cmd and any(b in cmd for b in ("chrome", "chromium", "brave")):
+                m = re.search(r"--app=(\S+)", cmd)
+                return m.group(1) if m else "__RUNNING__"
+        except Exception:
+            continue
     return None
 
 
@@ -215,9 +324,25 @@ def stop_profile(profile_dir):
 
 
 def start_slot_process(browser, slot, x, y, w, h, env, login_mode=False):
+    slot_type = slot.get("type", "web")
+    if slot_type == "app":
+        cmd_str = str(slot.get("exec_cmd") or slot.get("url") or "").strip()
+        if not cmd_str:
+            return
+        # Strip freedesktop % placeholders (%u, %U, %f, %F, %i, %c, %k)
+        parts = [p for p in shlex.split(cmd_str) if not re.match(r"^%[a-zA-Z]$", p)]
+        if parts:
+            subprocess.Popen(parts, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return
+
     profile_dir = os.path.join(WIDGETS_DIR, slot["profile"])
     os.makedirs(profile_dir, exist_ok=True)
     url = slot["url"]
+    launch_env = env.copy()
+    desktop_hint = widget_desktop_path(slot["id"])
+    if os.path.exists(desktop_hint):
+        launch_env["BAMF_DESKTOP_FILE_HINT"] = desktop_hint
+
     if login_mode:
         cmd = [
             browser,
@@ -239,17 +364,11 @@ def start_slot_process(browser, slot, x, y, w, h, env, login_mode=False):
             "--disable-background-networking",
             "--disable-sync",
         ]
-    subprocess.Popen(
-        cmd,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    subprocess.Popen(cmd, env=launch_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
-def align_window(wm_class, x, y, w, h, opacity_pct, env):
-    wid = find_wid(wm_class, env)
+def align_window(slot, x, y, w, h, opacity_pct, env):
+    wid = find_wid(slot.get("wm_class", ""), env)
     if not wid:
         return False
 
@@ -272,6 +391,13 @@ def align_window(wm_class, x, y, w, h, opacity_pct, env):
         env=env,
         stderr=subprocess.DEVNULL,
     )
+    if slot.get("type", "web") == "web":
+        desktop_hint = widget_desktop_path(slot["id"])
+        subprocess.run(
+            ["xprop", "-id", wid, "-f", "_BAMF_DESKTOP_FILE", "8s", "-set", "_BAMF_DESKTOP_FILE", desktop_hint],
+            env=env,
+            stderr=subprocess.DEVNULL,
+        )
     subprocess.run(["wmctrl", "-i", "-r", wid, "-b", "remove,maximized_vert,maximized_horz"], env=env, stderr=subprocess.DEVNULL)
     subprocess.run(["wmctrl", "-i", "-r", wid, "-t", "-1"], env=env, stderr=subprocess.DEVNULL)
     if shutil.which("xdotool"):
@@ -293,7 +419,7 @@ def align_all(env):
         if not slot.get("enabled", False):
             continue
         x, y, w, h, opacity, _ = resolve_slot_geom(slot, screen_w, screen_h)
-        align_window(slot["wm_class"], x, y, w, h, opacity, env)
+        align_window(slot, x, y, w, h, opacity, env)
 
 
 def cmd_apply(restart_urls=False):
@@ -310,7 +436,7 @@ def cmd_apply(restart_urls=False):
         except Exception:
             prev_active = None
 
-    sync_configs(restart_devilspie=True, env=env)
+    sync_configs(restart_devilspie=True, update_plank=True, env=env)
 
     # Always stop legacy Gmail (miniweb) profile if still lingering
     stop_profile(os.path.join(WIDGETS_DIR, "miniweb"))
@@ -321,24 +447,27 @@ def cmd_apply(restart_urls=False):
 
     need_launch = []
     for slot in slots:
-        pdir = os.path.join(WIDGETS_DIR, slot["profile"])
-        if not slot.get("enabled", False):
-            stop_profile(pdir)
-            continue
-        running_url = get_running_app_url(pdir)
-        if restart_urls:
-            if running_url is not None and running_url != slot["url"]:
+        slot_type = slot.get("type", "web")
+        if slot_type == "web":
+            pdir = os.path.join(WIDGETS_DIR, slot["profile"])
+            if not slot.get("enabled", False):
+                stop_profile(pdir)
+                continue
+            running_url = get_running_profile_url(pdir)
+            if restart_urls and running_url is not None:
                 stop_profile(pdir)
                 time.sleep(0.4)
                 running_url = None
-            elif running_url is not None:
-                # Restart anyway on explicit --restart-urls? Only if URL differs or forced;
-                # if user clicked "URL変更を反映", restart all enabled slots to ensure fresh page load
-                stop_profile(pdir)
-                time.sleep(0.4)
-                running_url = None
-        if running_url is None:
-            need_launch.append(slot)
+            if running_url is None:
+                need_launch.append(slot)
+        else:
+            wid = find_wid(slot.get("wm_class", ""), env)
+            if not slot.get("enabled", False):
+                if wid:
+                    subprocess.run(["wmctrl", "-i", "-c", wid], env=env, stderr=subprocess.DEVNULL)
+                continue
+            if not wid:
+                need_launch.append(slot)
 
     for slot in need_launch:
         x, y, w, h, _, _ = resolve_slot_geom(slot, screen_w, screen_h)
@@ -353,7 +482,7 @@ def cmd_apply(restart_urls=False):
                 if sid in done:
                     continue
                 x, y, w, h, opacity, _ = resolve_slot_geom(slot, screen_w, screen_h)
-                if align_window(slot["wm_class"], x, y, w, h, opacity, env):
+                if align_window(slot, x, y, w, h, opacity, env):
                     done.add(sid)
             if len(done) == len(enabled_slots):
                 break
@@ -365,7 +494,7 @@ def cmd_apply(restart_urls=False):
     if prev_active:
         widget_wids = set()
         for slot in slots:
-            wid = find_wid(slot["wm_class"], env)
+            wid = find_wid(slot.get("wm_class", ""), env)
             if wid:
                 widget_wids.add(int(wid, 16))
         try:
@@ -375,19 +504,70 @@ def cmd_apply(restart_urls=False):
             pass
 
 
+def cmd_unlock():
+    """Temporarily restore titlebar/resize borders and bring widgets forward for direct mouse positioning."""
+    env = ensure_display_env()
+    cfg = load_config()
+    for slot in cfg.get("slots", []):
+        if not slot.get("enabled", False):
+            continue
+        wid = find_wid(slot.get("wm_class", ""), env)
+        if not wid:
+            continue
+        subprocess.run(["wmctrl", "-i", "-r", wid, "-b", "remove,below"], env=env, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            ["xprop", "-id", wid, "-f", "_MOTIF_WM_HINTS", "32c", "-set", "_MOTIF_WM_HINTS", "2, 0, 1, 0, 0"],
+            env=env,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(["wmctrl", "-i", "-a", wid], env=env, stderr=subprocess.DEVNULL)
+
+
+def cmd_capture():
+    """Capture current desktop coordinates/sizes of running widgets into widgets.json and lock them again."""
+    env = ensure_display_env()
+    cfg = load_config()
+    changed = False
+    for slot in cfg.get("slots", []):
+        if not slot.get("enabled", False):
+            continue
+        wid = find_wid(slot.get("wm_class", ""), env)
+        if not wid:
+            continue
+        try:
+            out = subprocess.check_output(["xwininfo", "-id", wid], env=env, text=True, timeout=2)
+            mx = re.search(r"Absolute upper-left X:\s+(-?\d+)", out)
+            my = re.search(r"Absolute upper-left Y:\s+(-?\d+)", out)
+            mw = re.search(r"Width:\s+(\d+)", out)
+            mh = re.search(r"Height:\s+(\d+)", out)
+            if mx and my and mw and mh:
+                slot["x"] = max(0, int(mx.group(1)))
+                slot["y"] = max(28, int(my.group(1)))
+                slot["width"] = max(200, int(mw.group(1)))
+                slot["height"] = max(160, int(mh.group(1)))
+                slot["align_right"] = False
+                changed = True
+        except Exception:
+            pass
+    if changed:
+        save_config(cfg)
+    cmd_apply(restart_urls=False)
+
+
 def cmd_focus(slot_id):
     env = ensure_display_env()
     cfg = load_config()
     slot = next((s for s in cfg.get("slots", []) if s["id"] == slot_id), None)
     if not slot:
         return
-    wid = find_wid(slot["wm_class"], env)
+    wid = find_wid(slot.get("wm_class", ""), env)
     if wid:
         subprocess.run(["wmctrl", "-i", "-a", wid], env=env, stderr=subprocess.DEVNULL)
     else:
         slot["enabled"] = True
+        save_config(cfg)
         cmd_apply(restart_urls=False)
-        wid = find_wid(slot["wm_class"], env)
+        wid = find_wid(slot.get("wm_class", ""), env)
         if wid:
             subprocess.run(["wmctrl", "-i", "-a", wid], env=env, stderr=subprocess.DEVNULL)
 
@@ -401,6 +581,8 @@ def cmd_login(slot_id=None):
     cfg = load_config()
     screen_w, screen_h = get_screen_size(env)
     for slot in cfg.get("slots", []):
+        if slot.get("type", "web") != "web":
+            continue
         if slot_id and slot["id"] != slot_id:
             continue
         if not slot_id and not slot.get("enabled", False):
@@ -415,18 +597,36 @@ def cmd_login(slot_id=None):
 def cmd_stop():
     cfg = load_config()
     for slot in cfg.get("slots", []):
-        stop_profile(os.path.join(WIDGETS_DIR, slot["profile"]))
+        if slot.get("type", "web") == "web":
+            stop_profile(os.path.join(WIDGETS_DIR, slot["profile"]))
     stop_profile(os.path.join(WIDGETS_DIR, "miniweb"))
 
 
 def cmd_youtube_music():
     env = ensure_display_env()
+    wid = find_wid("YouTubeMusicApp", env)
+    if wid:
+        subprocess.run(["wmctrl", "-i", "-a", wid], env=env, stderr=subprocess.DEVNULL)
+        return
     browser = detect_browser()
     if not browser:
         sys.exit(1)
+    yt_dir = os.path.join(WIDGETS_DIR, "ytmusic")
+    os.makedirs(yt_dir, exist_ok=True)
+    launch_env = env.copy()
+    yt_desktop = os.path.join(APPS_DIR, "youtube-music.desktop")
+    if os.path.exists(yt_desktop):
+        launch_env["BAMF_DESKTOP_FILE_HINT"] = yt_desktop
     subprocess.Popen(
-        [browser, "--app=https://music.youtube.com"],
-        env=env,
+        [
+            browser,
+            "--app=https://music.youtube.com",
+            "--class=YouTubeMusicApp",
+            f"--user-data-dir={yt_dir}",
+            "--no-first-run",
+            "--no-default-browser-check",
+        ],
+        env=launch_env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
@@ -438,11 +638,15 @@ def main():
     if not args:
         cmd_apply(restart_urls=False)
     elif args[0] == "sync-configs":
-        sync_configs(restart_devilspie=False)
+        sync_configs(restart_devilspie=False, update_plank=False)
     elif args[0] == "apply":
         cmd_apply(restart_urls="--restart-urls" in args)
     elif args[0] == "align":
         align_all(ensure_display_env())
+    elif args[0] == "unlock":
+        cmd_unlock()
+    elif args[0] == "capture":
+        cmd_capture()
     elif args[0] == "focus" and len(args) >= 2:
         cmd_focus(args[1])
     elif args[0] == "login":

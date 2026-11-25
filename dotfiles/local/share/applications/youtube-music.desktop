@@ -4,6 +4,7 @@ Name=YouTube Music
 Comment=YouTube Music Web Player
 Exec=__USER_HOME__/.local/bin/launch-desktop-widgets.sh --youtube-music
 Icon=eu.tiliado.NuvolaAppYoutubeMusic
+StartupWMClass=YouTubeMusicApp
 Terminal=false
 Categories=AudioVideo;Audio;Music;
 StartupNotify=true

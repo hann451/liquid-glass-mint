@@ -12,6 +12,8 @@ mkdir -p \
   "$DOT/config/plank/dock1/launchers" \
   "$DOT/config/ulauncher/user-themes/liquid-glass" \
   "$DOT/config/autostart" \
+  "$DOT/config/fcitx5" \
+  "$DOT/config/mozc" \
   "$DOT/config/cinnamon-spices/BlurCinnamon@klangman" \
   "$DOT/config/cinnamon-spices/Cinnamenu@json" \
   "$DOT/config/cinnamon-spices/spicy-clipboard-applet@Twilight0" \
@@ -38,12 +40,18 @@ with open(dst, "w", encoding="utf-8") as f:
     json.dump(cfg, f, indent=4, ensure_ascii=False)
 PY
 
-# Devilspie2 & Desktop Web Widget configs (never copy browser profile dirs or legacy urls.conf)
+# Devilspie2 & Desktop Web Widget configs (never copy browser profile dirs!)
 cp "$HOME/.config/devilspie2/desktop_widgets.lua" "$DOT/config/devilspie2/"
 [ -f "$HOME/.config/desktop-widgets/widgets.json" ] && cp "$HOME/.config/desktop-widgets/widgets.json" "$DOT/config/desktop-widgets/"
 cp "$HOME/.config/desktop-widgets/stylus-liquid-glass.css" "$DOT/config/desktop-widgets/"
 
-# Plank theme & launchers
+# Fcitx5 & Mozc smart generator
+[ -f "$HOME/.config/fcitx5/config" ] && cp "$HOME/.config/fcitx5/config" "$DOT/config/fcitx5/"
+mkdir -p "$DOT/config/fcitx5/conf"
+[ -f "$HOME/.config/fcitx5/conf/xcb.conf" ] && cp "$HOME/.config/fcitx5/conf/xcb.conf" "$DOT/config/fcitx5/conf/"
+[ -f "$HOME/.config/mozc/setup_mozc_smart.py" ] && cp "$HOME/.config/mozc/setup_mozc_smart.py" "$DOT/config/mozc/"
+
+# Plank theme & launchers (exclude hidden desktop-widget-* or custom user-only items if desired)
 cp "$HOME/.local/share/plank/themes/LiquidGlass/dock.theme" "$DOT/local/share/plank/themes/LiquidGlass/"
 cp "$HOME/.config/plank/dock1/launchers/"*.dockitem "$DOT/config/plank/dock1/launchers/"
 
@@ -55,17 +63,19 @@ for f in manifest.json theme.css theme-gtk-3.20.css; do
 done
 
 # Autostart entries
-for f in plank.desktop devilspie2.desktop ulauncher.desktop conky-liquid-glass.desktop desktop-widgets.desktop; do
+for f in plank.desktop devilspie2.desktop ulauncher.desktop conky-liquid-glass.desktop desktop-widgets.desktop keyboard-ime-caps.desktop; do
     [ -f "$HOME/.config/autostart/$f" ] && cp "$HOME/.config/autostart/$f" "$DOT/config/autostart/"
 done
 
 # Custom app launchers & management scripts
-for f in youtube-music.desktop notion-widget.desktop timetree-widget.desktop desktop-widgets-settings.desktop; do
+for f in youtube-music.desktop desktop-widgets-settings.desktop; do
     [ -f "$HOME/.local/share/applications/$f" ] && cp "$HOME/.local/share/applications/$f" "$DOT/local/share/applications/"
 done
 cp "$HOME/.local/bin/launch-desktop-widgets.sh" "$DOT/local/bin/"
 cp "$HOME/.local/bin/desktop-widgets-manager.py" "$DOT/local/bin/"
 cp "$HOME/.local/bin/desktop-widgets-settings.py" "$DOT/local/bin/"
+cp "$HOME/.local/bin/setup-keyboard-ime.sh" "$DOT/local/bin/"
+cp "$HOME/.local/bin/setup-fingerprint.sh" "$DOT/local/bin/"
 
 # Cinnamon Spices settings (sanitize Cinnamenu recent-apps)
 [ -f "$HOME/.config/cinnamon/spices/BlurCinnamon@klangman/BlurCinnamon@klangman.json" ] && \
@@ -91,6 +101,6 @@ fi
     cp "$HOME/Pictures/Wallpapers/LiquidGlass-Wave.png" "$DOT/Pictures/Wallpapers/"
 
 # Normalize hardcoded user home path to __USER_HOME__ for portability
-find "$DOT" -type f \( -name '*.conf' -o -name '*.lua' -o -name '*.py' -o -name '*.sh' -o -name '*.desktop' -o -name '*.dockitem' -o -name '*.json' -o -name '*.css' \) -exec sed -i "s|$HOME|__USER_HOME__|g" {} +
+find "$DOT" -type f \( -name '*.conf' -o -name '*.lua' -o -name '*.py' -o -name '*.sh' -o -name '*.desktop' -o -name '*.dockitem' -o -name '*.json' -o -name '*.css' -o -name 'config' \) -exec sed -i "s|$HOME|__USER_HOME__|g" {} +
 
-echo "同期完了: $DOT に公開用設定を保存しました（個人情報・キャッシュ・サードパーティ壁紙を除外済み）。"
+echo "同期完了: $DOT に最新設定を保存しました。"

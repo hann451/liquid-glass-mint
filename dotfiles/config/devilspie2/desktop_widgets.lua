@@ -4,7 +4,7 @@ local inst = string.lower(get_class_instance_name() or "")
 
 if (cls == "desktopnotion" or inst == "desktopnotion") then
     undecorate_window()
-    set_window_geometry2(1254, 42, 650, 600)
+    set_window_geometry2(1348, 52, 540, 510)
     set_window_below(true)
     stick_window()
     pin_window()
@@ -15,7 +15,7 @@ end
 
 if (cls == "desktopwidget2" or inst == "desktopwidget2") then
     undecorate_window()
-    set_window_geometry2(1364, 662, 540, 390)
+    set_window_geometry2(1348, 582, 540, 390)
     set_window_below(true)
     stick_window()
     pin_window()

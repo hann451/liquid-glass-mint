@@ -2,51 +2,57 @@
     "slots": [
         {
             "id": "slot1",
-            "name": "TimeTree",
+            "name": "Notion",
+            "type": "web",
             "wm_class": "DesktopNotion",
             "profile": "notion",
             "enabled": true,
-            "url": "https://timetreeapp.com/calendars",
+            "url": "https://www.notion.so/",
             "align_right": true,
-            "right_margin": 16,
+            "right_margin": 32,
             "x": 1348,
-            "y": 42,
-            "width": 650,
-            "height": 600,
+            "y": 52,
+            "width": 540,
+            "height": 510,
             "opacity": 88,
-            "corner_radius": 20
+            "corner_radius": 20,
+            "pin_to_dock": false
         },
         {
             "id": "slot2",
             "name": "TimeTree",
+            "type": "web",
             "wm_class": "DesktopWidget2",
             "profile": "timetree",
             "enabled": true,
             "url": "https://timetreeapp.com/calendars",
             "align_right": true,
-            "right_margin": 16,
+            "right_margin": 32,
             "x": 1348,
-            "y": 662,
+            "y": 582,
             "width": 540,
             "height": 390,
             "opacity": 88,
-            "corner_radius": 20
+            "corner_radius": 20,
+            "pin_to_dock": false
         },
         {
             "id": "slot3",
-            "name": "カスタム",
+            "name": "Gemini",
+            "type": "web",
             "wm_class": "DesktopWidget3",
             "profile": "custom3",
             "enabled": false,
-            "url": "https://calendar.google.com/",
+            "url": "https://gemini.google.com/",
             "align_right": false,
             "right_margin": 32,
-            "x": 360,
+            "x": 380,
             "y": 52,
             "width": 440,
-            "height": 420,
+            "height": 740,
             "opacity": 88,
-            "corner_radius": 20
+            "corner_radius": 20,
+            "pin_to_dock": false
         }
     ]
 }
